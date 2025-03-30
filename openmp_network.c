@@ -26,53 +26,41 @@ double bias2[OUTPUT_NODES];
 
 void load_mnist()
 {
+    FILE *training_images_file = NULL;
+    FILE *training_labels_file = NULL;
+    FILE *test_images_file = NULL;
+    FILE *test_labels_file = NULL;
     
-    #pragma omp parallel
+    
+    training_images_file = fopen("mnist_train_images.bin", "rb");
+    training_labels_file = fopen("mnist_train_labels.bin", "rb");
+    test_images_file = fopen("mnist_test_images.bin", "rb");
+    test_labels_file = fopen("mnist_test_labels.bin", "rb");
+    
+    printf("All MNIST files opened successfully\n");
+    
+    #pragma omp parallel sections
     {
-        #pragma omp master
+        #pragma omp section
         {
-            FILE *training_images_file = fopen("mnist_train_images.bin", "rb");
-            if (training_images_file == NULL)
-            {
-                printf("Error opening training images file\n");
-                exit(1);
-            }
-
-            FILE *training_labels_file = fopen("mnist_train_labels.bin", "rb");
-            if (training_labels_file == NULL)
-            {
-                printf("Error opening training labels file\n");
-                exit(1);
-            }
-
-            FILE *test_images_file = fopen("mnist_test_images.bin", "rb");
-            if (test_images_file == NULL)
-            {
-                printf("Error opening test images file\n");
-                exit(1);
-            }
-
-            FILE *test_labels_file = fopen("mnist_test_labels.bin", "rb");
-            if (test_labels_file == NULL)
-            {
-                printf("Error opening test labels file\n");
-                exit(1);
-            }
-            
-            printf("Thread %d: All MNIST files opened successfully\n", 
-                   omp_get_thread_num());
-            
             
             for (int i = 0; i < NUM_TRAINING_IMAGES; i++)
             {
+                unsigned char pixels[INPUT_NODES];
+                
+                fread(pixels, sizeof(unsigned char), INPUT_NODES, training_images_file);
+                
+                
                 for (int j = 0; j < INPUT_NODES; j++)
                 {
-                    unsigned char pixel;
-                    fread(&pixel, sizeof(unsigned char), 1, training_images_file);
-                    training_images[i][j] = (double)pixel / 255.0;
+                    training_images[i][j] = (double)pixels[j] / 255.0;
                 }
             }
-            
+            printf("Thread %d: Training images loaded\n", omp_get_thread_num());
+        }
+        
+        #pragma omp section
+        {
             
             for (int i = 0; i < NUM_TRAINING_IMAGES; i++)
             {
@@ -83,17 +71,27 @@ void load_mnist()
                     training_labels[i][j] = (j == label) ? 1.0 : 0.0;
                 }
             }
-            
+            printf("Thread %d: Training labels loaded\n", omp_get_thread_num());
+        }
+        
+        #pragma omp section
+        {
             
             for (int i = 0; i < NUM_TEST_IMAGES; i++)
             {
+                unsigned char pixels[INPUT_NODES];
+                fread(pixels, sizeof(unsigned char), INPUT_NODES, test_images_file);
+                
                 for (int j = 0; j < INPUT_NODES; j++)
                 {
-                    unsigned char pixel;
-                    fread(&pixel, sizeof(unsigned char), 1, test_images_file);
-                    test_images[i][j] = (double)pixel / 255.0;
+                    test_images[i][j] = (double)pixels[j] / 255.0;
                 }
             }
+            printf("Thread %d: Test images loaded\n", omp_get_thread_num());
+        }
+        
+        #pragma omp section
+        {
             
             for (int i = 0; i < NUM_TEST_IMAGES; i++)
             {
@@ -104,16 +102,16 @@ void load_mnist()
                     test_labels[i][j] = (j == label) ? 1.0 : 0.0;
                 }
             }
-
-            fclose(training_images_file);
-            fclose(training_labels_file);
-            fclose(test_images_file);
-            fclose(test_labels_file);
-            
-            printf("Thread %d: MNIST data loaded successfully\n", 
-                   omp_get_thread_num());
-        } 
-    } 
+            printf("Thread %d: Test labels loaded\n", omp_get_thread_num());
+        }
+    }
+    
+    fclose(training_images_file);
+    fclose(training_labels_file);
+    fclose(test_images_file);
+    fclose(test_labels_file);
+    
+    printf("MNIST data loaded successfully\n");
 }
 
 double sigmoid(double x)
@@ -261,13 +259,10 @@ double init_nodes_weight()
         
         #pragma omp master
         {
-            printf("Weights initialization started by master thread %d\n", 
-                   omp_get_thread_num());
+            printf("Weights initialization started by master thread %d\n", omp_get_thread_num());
         }
         
-        
         #pragma omp barrier
-        
         
         #pragma omp sections
         {
@@ -342,7 +337,6 @@ void save_weights_biases(const char* filename)
         printf("Error opening file for writing: %s\n", filename);
         return;
     }
-    
     
     fwrite(weight1, sizeof(double), INPUT_NODES * HIDDEN_NODES, file);
     fwrite(weight2, sizeof(double), HIDDEN_NODES * OUTPUT_NODES, file);
@@ -479,9 +473,9 @@ void lock_based_evaluation(int start_idx, int count) {
         local_correct += thread_correct;
         omp_unset_lock(&evaluation_lock);
         
-        
+    
         #pragma omp barrier
-        
+    
         #pragma omp single
         {
             printf("Lock-based evaluation completed. Correct: %d/%d\n", 
@@ -506,7 +500,11 @@ int main()
     double start_time = omp_get_wtime();
     
     init_nodes_weight();
+
+    double init_time = omp_get_wtime();
     load_mnist();
+    double load_time = omp_get_wtime();
+    printf("MNIST data loaded in %.2f seconds\n", load_time - init_time);
 
     printf("Starting training...\n");
     
