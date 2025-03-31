@@ -597,33 +597,16 @@ int main()
 
     printf("Starting training...\n");
     
-    // Перша половина епох використовує послідовний підхід до навчання
-    for(int epoch=0; epoch < NUMBER_OF_EPOCHS/2; epoch++)
+    // Усі епохи виконуються паралельно з використанням task-based підходу
+    // для максимального використання доступних обчислювальних ресурсів
+    for(int epoch=0; epoch < NUMBER_OF_EPOCHS; epoch++)
     {
-        int correct_train = 0;
-        
-        
-        for (int i = 0; i < NUM_TRAINING_IMAGES; i++)
-        {
-            int correct_label = max_index(training_labels[i], OUTPUT_NODES);
-            train(training_images[i], training_labels[i], weight1, weight2, bias1, bias2, correct_label, &correct_train);
-            
-            if ((i+1) % 10000 == 0) {
-                printf("Progress: %d/%d images processed in epoch %d\n", i+1, NUM_TRAINING_IMAGES, epoch);
-            }
-        }
-        printf("Epoch %d : Training Accuracy: %f\n", epoch, (double)correct_train / NUM_TRAINING_IMAGES);
-    }
-    
-    
-    // Друга половина епох використовує паралельний підхід на основі задач
-    for(int epoch=NUMBER_OF_EPOCHS/2; epoch < NUMBER_OF_EPOCHS; epoch++)
-    {
-        // Використання паралельного тренування на основі задач
+        // Використання паралельного тренування на основі задач для всіх епох
         task_based_training(epoch);
         
-        // Кожні 10 епох використовуємо також ordered batch тренування
-        if (epoch % 10 == 0) {
+        // Кожні 5 епох використовуємо також ordered batch тренування
+        // для додаткового тонкого налаштування моделі
+        if (epoch % 5 == 0) {
             ordered_batch_training(0, 5000);
         }
     }
