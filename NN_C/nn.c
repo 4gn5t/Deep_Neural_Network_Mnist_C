@@ -4,15 +4,7 @@
 #include <string.h>
 #include <omp.h>  
 #include <time.h>
-
-#define INPUT_NODES 784  
-#define HIDDEN_NODES 256 
-#define OUTPUT_NODES 10  
-
-#define NUM_TRAINING_IMAGES 60000
-#define NUM_TEST_IMAGES 10000
-
-#define NUMBER_OF_EPOCHS 10
+#include "nn.h"
 
 double training_images[NUM_TRAINING_IMAGES][INPUT_NODES];
 double training_labels[NUM_TRAINING_IMAGES][OUTPUT_NODES];
@@ -24,94 +16,9 @@ double weight2[HIDDEN_NODES][OUTPUT_NODES];
 double bias1[HIDDEN_NODES];
 double bias2[OUTPUT_NODES];
 
-void load_mnist()
+double relu(double x)
 {
-    FILE *training_images_file = fopen("mnist_train_images.bin", "rb");
-    if (training_images_file == NULL)
-    {
-        printf("Error opening training images file\n");
-        exit(1);
-    }
-
-    FILE *training_labels_file = fopen("mnist_train_labels.bin", "rb");
-    if (training_labels_file == NULL)
-    {
-        printf("Error opening training labels file\n");
-        exit(1);
-    }
-
-    FILE *test_images_file = fopen("mnist_test_images.bin", "rb");
-    if (test_images_file == NULL)
-    {
-        printf("Error opening test images file\n");
-        exit(1);
-    }
-
-    FILE *test_labels_file = fopen("mnist_test_labels.bin", "rb");
-    if (test_labels_file == NULL)
-    {
-        printf("Error opening test labels file\n");
-        exit(1);
-    }
-
-    for (int i = 0; i < NUM_TRAINING_IMAGES; i++)
-    {
-        for (int j = 0; j < INPUT_NODES; j++)
-        {
-            unsigned char pixel;
-            fread(&pixel, sizeof(unsigned char), 1, training_images_file);
-            training_images[i][j] = (double)pixel / 255.0;
-        }
-    }
-
-    for (int i = 0; i < NUM_TRAINING_IMAGES; i++)
-    {
-        unsigned char label;
-        fread(&label, sizeof(unsigned char), 1, training_labels_file);
-        for (int j = 0; j < OUTPUT_NODES; j++)
-        {
-            if (j == label)
-            {
-                training_labels[i][j] = 1;
-            }
-            else
-            {
-                training_labels[i][j] = 0;
-            }
-        }
-    }
-
-    for (int i = 0; i < NUM_TEST_IMAGES; i++)
-    {
-        for (int j = 0; j < INPUT_NODES; j++)
-        {
-            unsigned char pixel;
-            fread(&pixel, sizeof(unsigned char), 1, test_images_file);
-            test_images[i][j] = (double)pixel / 255.0;
-        }
-    }
-
-    for (int i = 0; i < NUM_TEST_IMAGES; i++)
-    {
-        unsigned char label;
-        fread(&label, sizeof(unsigned char), 1, test_labels_file);
-        for (int j = 0; j < OUTPUT_NODES; j++)
-        {
-            if (j == label)
-            {
-                test_labels[i][j] = 1;
-            }
-            else
-            {
-                test_labels[i][j] = 0;
-            }
-        }
-    }
-
-    fclose(training_images_file);
-    fclose(training_labels_file);
-    fclose(test_images_file);
-    fclose(test_labels_file);
+    return (x > 0) ? x : 0;
 }
 
 double sigmoid(double x)
@@ -119,23 +26,8 @@ double sigmoid(double x)
     return 1.0 / (1.0 + exp(-x));
 }
 
-int max_index(double arr[], int size) {
-    int max_i = 0;
-    for (int i = 1; i < size; i++) {
-        if (arr[i] > arr[max_i]) {
-            max_i = i;
-        }
-    }
-    return max_i;
-}
-
-void feedforward(double input[INPUT_NODES], 
-                double weight1[INPUT_NODES][HIDDEN_NODES],
-                double weight2[HIDDEN_NODES][OUTPUT_NODES],
-                double bias1[HIDDEN_NODES],
-                double bias2[OUTPUT_NODES],
-                double hidden[HIDDEN_NODES],
-                double output_layer[OUTPUT_NODES]) 
+void feedforward(double input[INPUT_NODES], double weight1[INPUT_NODES][HIDDEN_NODES], double weight2[HIDDEN_NODES][OUTPUT_NODES],
+                double bias1[HIDDEN_NODES], double bias2[OUTPUT_NODES], double hidden[HIDDEN_NODES], double output_layer[OUTPUT_NODES]) 
 {
     
     for (int i = 0; i < HIDDEN_NODES; i++)
@@ -146,7 +38,7 @@ void feedforward(double input[INPUT_NODES],
             sum += input[j] * weight1[j][i];
         }
         sum += bias1[i];
-        hidden[i] = sigmoid(sum);
+        hidden[i] = relu(sum);
     }
     
     
@@ -162,33 +54,29 @@ void feedforward(double input[INPUT_NODES],
     }
 }
 
-void train(double input[INPUT_NODES], double output[OUTPUT_NODES], 
-    double weight1[INPUT_NODES][HIDDEN_NODES], double weight2[HIDDEN_NODES][OUTPUT_NODES], 
-    double bias1[HIDDEN_NODES], double bias2[OUTPUT_NODES], 
-    int correct_label, int *correct_counter)
+void train(double input[INPUT_NODES], double output[OUTPUT_NODES], double weight1[INPUT_NODES][HIDDEN_NODES], double weight2[HIDDEN_NODES][OUTPUT_NODES], 
+    double bias1[HIDDEN_NODES], double bias2[OUTPUT_NODES], int correct_label, int *correct_counter)
 {
+
     double hidden[HIDDEN_NODES];
     double output_layer[OUTPUT_NODES];
 
-    
     feedforward(input, weight1, weight2, bias1, bias2, hidden, output_layer);
 
-    int index = max_index(output_layer, OUTPUT_NODES);
-    
+    int index = max_index(output_layer, OUTPUT_NODES);    
     if (index == correct_label) {
         (*correct_counter)++;
     }
     
     
     double delta_output[OUTPUT_NODES];
-    
     for (int i = 0; i < OUTPUT_NODES; i++)
     {
         delta_output[i] = (output[i] - output_layer[i]) * output_layer[i] * (1 - output_layer[i]);
     }
     
+
     double delta_hidden[HIDDEN_NODES];
-    
     for (int i = 0; i < HIDDEN_NODES; i++)
     {
         delta_hidden[i] = 0;
@@ -200,9 +88,7 @@ void train(double input[INPUT_NODES], double output[OUTPUT_NODES],
     }
     
     
-    double learning_rate = 0.1;
-    
-    
+    double learning_rate = 0.001;
     for (int i = 0; i < HIDDEN_NODES; i++)
     {
         for (int j = 0; j < OUTPUT_NODES; j++)
@@ -211,7 +97,6 @@ void train(double input[INPUT_NODES], double output[OUTPUT_NODES],
         }
     }
     
-    
     for (int i = 0; i < INPUT_NODES; i++)
     {
         for (int j = 0; j < HIDDEN_NODES; j++)
@@ -219,7 +104,6 @@ void train(double input[INPUT_NODES], double output[OUTPUT_NODES],
             weight1[i][j] += learning_rate * delta_hidden[j] * input[i];
         }
     }
-    
     
     for (int i = 0; i < HIDDEN_NODES; i++)
     {
@@ -234,7 +118,6 @@ void train(double input[INPUT_NODES], double output[OUTPUT_NODES],
 
 double init_nodes_weight()
 {
-    
     double xavier_init_hidden = sqrt(6.0 / (INPUT_NODES + HIDDEN_NODES));
     double xavier_init_output = sqrt(6.0 / (HIDDEN_NODES + OUTPUT_NODES));
     
@@ -262,13 +145,11 @@ double init_nodes_weight()
     }
 }
 
-void test(double input[INPUT_NODES], double weight1[INPUT_NODES][HIDDEN_NODES], 
-    double weight2[HIDDEN_NODES][OUTPUT_NODES], double bias1[HIDDEN_NODES], 
+void test(double input[INPUT_NODES], double weight1[INPUT_NODES][HIDDEN_NODES], double weight2[HIDDEN_NODES][OUTPUT_NODES], double bias1[HIDDEN_NODES], 
     double bias2[OUTPUT_NODES], int correct_label, int *correct_counter)
 {
     double hidden[HIDDEN_NODES];
     double output_layer[OUTPUT_NODES];
-
     
     feedforward(input, weight1, weight2, bias1, bias2, hidden, output_layer);
     
@@ -279,33 +160,10 @@ void test(double input[INPUT_NODES], double weight1[INPUT_NODES][HIDDEN_NODES],
     }
 }
 
-void save_weights_biases(const char* filename)
-{
-    FILE* file = fopen(filename, "wb");
-    if (file == NULL)
-    {
-        printf("Error opening file for writing: %s\n", filename);
-        return;
-    }
-    
-    
-    fwrite(weight1, sizeof(double), INPUT_NODES * HIDDEN_NODES, file);
-    fwrite(weight2, sizeof(double), HIDDEN_NODES * OUTPUT_NODES, file);
-    fwrite(bias1, sizeof(double), HIDDEN_NODES, file);
-    fwrite(bias2, sizeof(double), OUTPUT_NODES, file);
-    
-    fclose(file);
-    printf("Weights and biases saved to %s\n", filename);
-}
-
 int main()
 {
     int correct_predictions = 0;
-    
-    
     srand(42); 
-    
-    
     clock_t start_time = clock();
     
     init_nodes_weight();
@@ -316,6 +174,7 @@ int main()
     for(int epoch=0; epoch<NUMBER_OF_EPOCHS; epoch++)
     {
         int correct_train = 0;
+        int loss_train = 0;
         
         for (int i = 0; i < NUM_TRAINING_IMAGES; i++)
         {
@@ -327,7 +186,9 @@ int main()
                 printf("Progress: %d/%d images processed in epoch %d\n", i+1, NUM_TRAINING_IMAGES, epoch);
             }
         }
-        printf("Epoch %d : Training Accuracy: %f\n", epoch, (double)correct_train / NUM_TRAINING_IMAGES);
+
+        printf("Epoch %d | Train Loss: %f  | Training Accuracy: %f    \n", epoch, 
+               (double)correct_train / NUM_TRAINING_IMAGES, (double)correct_train / NUM_TRAINING_IMAGES);
     }
     save_weights_biases("model.bin");
     
@@ -354,8 +215,6 @@ int main()
                 continue;
             }
             
-            
-            
             double hidden[HIDDEN_NODES];
             double output_layer[OUTPUT_NODES];
             
@@ -379,7 +238,6 @@ int main()
 
     
     correct_predictions = 0;
-    
     
     printf("Testing the network on %d images...\n", NUM_TEST_IMAGES);
     
